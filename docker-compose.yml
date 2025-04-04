@@ -1,0 +1,82 @@
+version: "3.8"
+
+services:
+  # Backend Service (Go)
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: go-backend
+    ports:
+      - "8080:8080"
+    environment:
+      - RABBITMQ_URL=amqp://guest:guest@rabbitmq:5672/
+      - REDIS_URL=redis://redis:6379
+      - MONGODB_URL=mongodb://mongodb:27017
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      redis:
+        condition: service_started
+      mongodb:
+        condition: service_started
+    networks:
+      - app-network
+
+  # Frontend Service (Vue)
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile # ใช้ Dockerfile ของ Vue ที่สร้างไว้
+    container_name: vue-frontend
+    ports:
+      - "80:80"   # เข้าถึง Vue ผ่านพอร์ต 80
+    depends_on:
+      - backend  # รอ backend ให้พร้อมก่อน
+    networks:
+      - app-network
+
+  # RabbitMQ Service
+  rabbitmq:
+    image: "rabbitmq:3.9-management" 
+    
+    container_name: rabbitmq
+    ports:
+      - "15672:15672"  # UI Management สำหรับ RabbitMQ
+      - "5672:5672"    # การเชื่อมต่อ AMQP
+    environment:
+      - RABBITMQ_DEFAULT_USER=guest
+      - RABBITMQ_DEFAULT_PASS=guest
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - app-network
+
+  # Redis Service
+  redis:
+    image: "redis:alpine"
+    container_name: redis
+    ports:
+      - "6379:6379"
+    networks:
+      - app-network
+
+  # MongoDB Service
+  mongodb:
+    image: "mongo:latest"
+    container_name: mongodb
+    ports:
+      - "27017:27017"
+    environment:
+      - MONGO_INITDB_ROOT_USERNAME=root
+      - MONGO_INITDB_ROOT_PASSWORD=rootpassword
+    networks:
+      - app-network
+
+# สร้าง network ให้ทุก container เชื่อมต่อกัน
+networks:
+  app-network:
+    driver: bridge
